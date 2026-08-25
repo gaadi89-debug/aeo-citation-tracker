@@ -1,0 +1,52 @@
+queries:
+  - id: q1
+    text: "Best AI inference infrastructure platforms for production deployment"
+  - id: q2
+    text: "How to reduce time to first token for voice AI applications"
+  - id: q3
+    text: "AI inference optimization for enterprise workloads"
+  - id: q4
+    text: "Alternatives to Triton Inference Server"
+  - id: q5
+    text: "How do companies like Exotel or Squadstack scale their AI infrastructure"
+  - id: q6
+    text: "AI inference platforms India"
+  - id: q7
+    text: "SimpliSmart"
+  - id: q8
+    text: "Baseten alternatives"
+
+brands:
+  - key: simplismart
+    label: Simplismart
+    patterns:
+      - 'simpli[\s\-]*smart'
+    domains: ["simplismart.ai"]
+
+  - key: baseten
+    label: Baseten
+    patterns:
+      - 'base[\s\-]*ten'
+    domains: ["baseten.co"]
+
+  - key: fireworks
+    label: Fireworks AI
+    patterns:
+      - 'firework(?:s)?(?:\s*\.?\s*ai)?\b'
+    domains: ["fireworks.ai"]
+
+  - key: together
+    label: Together AI
+    patterns:
+      - 'together\s*\.?\s*ai\b'
+      - 'togethercomputer'
+    domains: ["together.ai", "together.xyz"]
+
+  - key: modal
+    label: Modal
+    patterns:
+      - 'modal\s+labs'
+      - 'modal\.com'
+    case_sensitive_patterns:
+      - '(?<![A-Za-z])Modal(?!\s*(?:window|dialog|logic|verb|analysis|ity|ities))(?![a-z])'
+    domains: ["modal.com"]
