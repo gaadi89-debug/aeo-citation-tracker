@@ -6,10 +6,15 @@ import yaml
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from openai import OpenAI
 from tracker.detect import load_brands, detect
 
 load_dotenv()
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+orouter = OpenAI(
+    api_key=os.environ["OPENROUTER_API_KEY"],
+    base_url="https://openrouter.ai/api/v1",
+)
 cfg = yaml.safe_load(open("config.yaml"))
 brands = load_brands(cfg)
 
@@ -53,34 +58,58 @@ def ask_gemini(query):
         return "", [], int((time.time() - start) * 1000), str(e)
 
 
+def ask_sonar(query):
+    """Returns (text, citations, latency_ms, error). Never raises."""
+    start = time.time()
+    try:
+        r = orouter.chat.completions.create(
+            model="perplexity/sonar",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": query}],
+        )
+        msg = r.choices[0].message
+        cites = []
+        for a in (getattr(msg, "annotations", None) or []):
+            uc = a.get("url_citation") if isinstance(a, dict) else getattr(a, "url_citation", None)
+            if uc:
+                url = uc.get("url") if isinstance(uc, dict) else getattr(uc, "url", None)
+                if url:
+                    cites.append(url)
+        return msg.content or "", cites, int((time.time() - start) * 1000), None
+    except Exception as e:
+        return "", [], int((time.time() - start) * 1000), str(e)
+
+
 def main():
     con = setup_db()
     run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    print(f"Run {run_id} — {len(cfg['queries'])} queries\n")
+    providers = [("gemini", ask_gemini), ("sonar", ask_sonar)]
+    print(f"Run {run_id} — {len(cfg['queries'])} queries x {len(providers)} providers\n")
 
     for q in cfg["queries"]:
-        print(f"  {q['id']}: {q['text'][:55]}...", end=" ", flush=True)
-        text, cites, ms, err = ask_gemini(q["text"])
+        for pname, pfunc in providers:
+            print(f"  {q['id']} [{pname}]: {q['text'][:38]}...", end=" ", flush=True)
+            text, cites, ms, err = pfunc(q["text"])
 
-        if err:
-            print(f"FAILED ({err[:40]})")
-        else:
-            found = [m.label for m in detect(text, brands, cites) if m.mentioned]
-            print(f"{ms}ms — {', '.join(found) if found else 'no brands'}")
+            if err:
+                print(f"FAILED ({err[:40]})")
+            else:
+                found = [m.label for m in detect(text, brands, cites) if m.mentioned]
+                print(f"{ms}ms — {', '.join(found) if found else 'no brands'}")
 
-        con.execute(
-            "INSERT INTO responses VALUES (?,?,?,?,?,?,?,?)",
-            (run_id, q["id"], q["text"], "gemini", text,
-             json.dumps(cites), ms, err),
-        )
-        for m in detect(text, brands, cites):
             con.execute(
-                "INSERT INTO mentions VALUES (?,?,?,?,?,?,?,?)",
-                (run_id, q["id"], "gemini", m.brand,
-                 int(m.mentioned), m.rank, int(m.cited), m.matched_text),
+                "INSERT INTO responses VALUES (?,?,?,?,?,?,?,?)",
+                (run_id, q["id"], q["text"], pname, text,
+                 json.dumps(cites), ms, err),
             )
-        con.commit()
-        time.sleep(7)   # free tier is ~10 requests/minute
+            for m in detect(text, brands, cites):
+                con.execute(
+                    "INSERT INTO mentions VALUES (?,?,?,?,?,?,?,?)",
+                    (run_id, q["id"], pname, m.brand,
+                     int(m.mentioned), m.rank, int(m.cited), m.matched_text),
+                )
+            con.commit()
+            time.sleep(7)
 
     print(f"\nDone. Saved to {DB}")
 
