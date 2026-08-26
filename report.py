@@ -12,43 +12,55 @@ latest = runs[-1]
 
 brands = [(b["key"], b["label"]) for b in cfg["brands"]]
 queries = [(q["id"], q["text"]) for q in cfg["queries"]]
+providers = [p[0] for p in con.execute(
+    "SELECT DISTINCT provider FROM responses WHERE run_id=? ORDER BY provider",
+    (latest,)).fetchall()]
 
-t = Table(title=f"AEO Citation Matrix — run {latest}")
-t.add_column("Query", style="cyan", no_wrap=False, max_width=42)
-for _, label in brands:
-    t.add_column(label, justify="center")
+for prov in providers:
+    ok = {r[0] for r in con.execute(
+        "SELECT query_id FROM responses WHERE run_id=? AND provider=? AND error IS NULL",
+        (latest, prov)).fetchall()}
 
-for qid, qtext in queries:
-    row = [f"{qid}  {qtext[:38]}"]
-    for bkey, _ in brands:
-        hit = con.execute(
-            "SELECT mentioned FROM mentions WHERE run_id=? AND query_id=? AND brand=?",
-            (latest, qid, bkey)).fetchone()
-        row.append("[green]YES[/]" if hit and hit[0] else "[dim]·[/]")
-    t.add_row(*row)
+    t = Table(title=f"{prov} — run {latest}  ({len(ok)}/{len(queries)} queries succeeded)")
+    t.add_column("Query", style="cyan", max_width=40)
+    for _, label in brands:
+        t.add_column(label, justify="center")
 
-console.print(t)
+    for qid, qtext in queries:
+        row = [f"{qid}  {qtext[:34]}"]
+        for bkey, _ in brands:
+            if qid not in ok:
+                row.append("[yellow]?[/]")
+                continue
+            hit = con.execute(
+                "SELECT mentioned FROM mentions WHERE run_id=? AND query_id=? "
+                "AND provider=? AND brand=?", (latest, qid, prov, bkey)).fetchone()
+            row.append("[green]YES[/]" if hit and hit[0] else "[dim]·[/]")
+        t.add_row(*row)
 
-s = Table(title="Share of voice")
-s.add_column("Brand")
-s.add_column("Queries", justify="right")
-s.add_column("Share", justify="right")
+    console.print(t)
 
-total = len(queries)
-scores = []
-for bkey, label in brands:
-    n = con.execute(
-        "SELECT COUNT(*) FROM mentions WHERE run_id=? AND brand=? AND mentioned=1",
-        (latest, bkey)).fetchone()[0]
-    scores.append((n, label))
+    s = Table(title=f"{prov} — share of voice")
+    s.add_column("Brand")
+    s.add_column("Seen", justify="right")
+    s.add_column("Share", justify="right")
 
-for n, label in sorted(scores, reverse=True):
-    bar = "█" * n + "░" * (total - n)
-    s.add_row(label, f"{n}/{total}", f"{bar}  {100*n//total}%")
+    total = len(ok)
+    scores = []
+    for bkey, label in brands:
+        n = con.execute(
+            "SELECT COUNT(*) FROM mentions WHERE run_id=? AND provider=? "
+            "AND brand=? AND mentioned=1 AND query_id IN (%s)" %
+            ",".join("?" * len(ok)),
+            (latest, prov, bkey, *ok)).fetchone()[0] if ok else 0
+        scores.append((n, label))
 
-console.print(s)
+    for n, label in sorted(scores, reverse=True):
+        bar = "█" * n + "░" * (total - n) if total else ""
+        pct = f"{100*n//total}%" if total else "n/a"
+        s.add_row(label, f"{n}/{total}", f"{bar}  {pct}")
 
-if len(runs) > 1:
-    console.print(f"\n[dim]{len(runs)} runs logged — trend available[/]")
-else:
-    console.print("\n[dim]1 run logged. Run again tomorrow for trend data.[/]")
+    console.print(s)
+    console.print()
+
+console.print(f"[dim]{len(runs)} runs logged[/]")
