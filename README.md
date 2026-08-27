@@ -48,6 +48,8 @@ OpenRouter keys from [openrouter.ai](https://openrouter.ai) — Sonar needs a sm
 ```bash
 python3 run.py        # query all 8 queries x 2 providers, log to SQLite
 python3 report.py     # print the citation matrix and share of voice
+python3 trend.py     # share of voice across runs
+streamlit run app.py # interactive dashboard
 ```
 
 A run takes about four minutes. There is a 7-second sleep between calls because the Gemini
