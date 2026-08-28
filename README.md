@@ -1,4 +1,6 @@
 # AEO Citation Tracker
+**Live dashboard:** https://aeo-citation-tracker-38baynbvz7hyyjwufwge5n.streamlit.app/
+(read-only view of logged runs — no API keys, so it can't run new queries)
 
 Tracks whether Simplismart and four competitors (Baseten, Fireworks AI, Together AI, Modal)
 get cited by AI answer engines for eight category-relevant search queries.
