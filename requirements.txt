@@ -1,0 +1,8 @@
+streamlit
+plotly
+pandas
+pyyaml
+google-genai
+openai
+python-dotenv
+rich
